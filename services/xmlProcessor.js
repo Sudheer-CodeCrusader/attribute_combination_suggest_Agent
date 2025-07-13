@@ -18,18 +18,7 @@ function generateXPathSuggestions(element, allElements) {
     });
   }
   
-  // 2. Using normalize-space for whitespace safety
-  if (attributes.text && attributes.text.trim()) {
-    const text = attributes.text.trim();
-    suggestions.push({
-      type: 'normalize_space',
-      xpath: `//${tag}[normalize-space(.)='${text}']`,
-      description: `Using normalize-space for whitespace safety`,
-      reliability: 'high'
-    });
-  }
-  
-  // 3. Content-based identification with resource-id
+  // 2. Content-based identification with resource-id
   if (attributes['resource-id'] && attributes.text && attributes.text.trim()) {
     const text = attributes.text.trim();
     suggestions.push({
@@ -40,23 +29,23 @@ function generateXPathSuggestions(element, allElements) {
     });
   }
   
-  // 4. Parent-child relationship identification
+  // 3. Parent-child relationship identification
   const parentChildSuggestions = generateParentChildSuggestions(element, allElements);
   suggestions.push(...parentChildSuggestions);
   
-  // 5. Sibling relationship identification
+  // 4. Sibling relationship identification
   const siblingSuggestions = generateSiblingSuggestions(element, allElements);
   suggestions.push(...siblingSuggestions);
   
-  // 6. Multiple attribute combinations
+  // 5. Multiple attribute combinations
   const attributeCombinationSuggestions = generateAttributeCombinationSuggestions(element, allElements);
   suggestions.push(...attributeCombinationSuggestions);
   
-  // 7. Context-based identification
+  // 6. Context-based identification
   const contextSuggestions = generateContextBasedSuggestions(element, allElements);
   suggestions.push(...contextSuggestions);
   
-  // 8. Scoped under specific containers with content
+  // 7. Scoped under specific containers with content
   const scopedSuggestions = generateScopedSuggestions(element, allElements);
   suggestions.push(...scopedSuggestions);
   
