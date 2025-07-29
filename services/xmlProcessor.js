@@ -3,11 +3,8 @@ import xml2js from 'xml2js';
 // Helper function to generate XPath suggestions
 function generateXPathSuggestions(element, allElements) {
   const suggestions = [];
-  
-  // Get element attributes
   const { attributes, xpath, tag } = element;
-  
-  // 1. Direct by exact text (most reliable)
+
   if (attributes.text && attributes.text.trim()) {
     const text = attributes.text.trim();
     suggestions.push({
@@ -16,9 +13,24 @@ function generateXPathSuggestions(element, allElements) {
       description: `Direct match by exact text "${text}"`,
       reliability: 'high'
     });
+
+    suggestions.push({
+      type: 'fuzzy_text',
+      xpath: `//${tag}[contains(@text, '${text}')]`,
+      description: 'Fuzzy match by partial text',
+      reliability: 'medium'
+    });
   }
-  
-  // 2. Content-based identification with resource-id
+
+  if (attributes['content-desc']) {
+    suggestions.push({
+      type: 'content_desc',
+      xpath: `//${tag}[@content-desc='${attributes['content-desc']}']`,
+      description: 'Match by content-desc (accessibility label)',
+      reliability: 'high'
+    });
+  }
+
   if (attributes['resource-id'] && attributes.text && attributes.text.trim()) {
     const text = attributes.text.trim();
     suggestions.push({
@@ -28,31 +40,7 @@ function generateXPathSuggestions(element, allElements) {
       reliability: 'very_high'
     });
   }
-  
-  // 3. Parent-child relationship identification
-  const parentChildSuggestions = generateParentChildSuggestions(element, allElements);
-  suggestions.push(...parentChildSuggestions);
-  
-  // 4. Sibling relationship identification
-  const siblingSuggestions = generateSiblingSuggestions(element, allElements);
-  suggestions.push(...siblingSuggestions);
-  
-  // 5. Multiple attribute combinations
-  const attributeCombinationSuggestions = generateAttributeCombinationSuggestions(element, allElements);
-  suggestions.push(...attributeCombinationSuggestions);
-  
-  // 6. Context-based identification
-  const contextSuggestions = generateContextBasedSuggestions(element, allElements);
-  suggestions.push(...contextSuggestions);
-  
-  // 7. Scoped under specific containers with content
-  const scopedSuggestions = generateScopedSuggestions(element, allElements);
-  suggestions.push(...scopedSuggestions);
-  
-  // Sort by reliability (very_high, high, medium, low)
-  const reliabilityOrder = { 'very_high': 4, 'high': 3, 'medium': 2, 'low': 1 };
-  suggestions.sort((a, b) => (reliabilityOrder[b.reliability] || 0) - (reliabilityOrder[a.reliability] || 0));
-  
+
   return suggestions;
 }
 
@@ -353,7 +341,6 @@ export async function processXml(xmlString) {
     throw new Error('Malformed XML');
   }
 
-  // Helper to traverse and collect info
   const elements = [];
   function traverse(node, path = '', indexMap = {}) {
     if (typeof node !== 'object' || node === null) return;
@@ -373,105 +360,96 @@ export async function processXml(xmlString) {
 
   const withResourceId = elements.filter(e => e.attributes && e.attributes['resource-id']);
   const withoutResourceId = elements.filter(e => !e.attributes || !e.attributes['resource-id']);
-
-  // Enhanced clickable analysis
   const clickableElements = elements.filter(e => e.attributes && e.attributes.clickable === 'true');
   const nonClickableElements = elements.filter(e => e.attributes && e.attributes.clickable === 'false');
   const elementsWithoutClickableAttr = elements.filter(e => !e.attributes || !e.attributes.hasOwnProperty('clickable'));
 
-  // Detailed clickable analysis
-  const clickableAnalysis = {
-    total_elements: elements.length,
-    clickable_true: clickableElements.length,
-    clickable_false: nonClickableElements.length,
-    clickable_not_specified: elementsWithoutClickableAttr.length,
-    clickable_percentage: elements.length > 0 ? (clickableElements.length / elements.length * 100).toFixed(2) : 0
-  };
+  const clickableDiscrepancy = {};
+  withResourceId.forEach(e => {
+    const rid = e.attributes['resource-id'];
+    if (!clickableDiscrepancy[rid]) clickableDiscrepancy[rid] = new Set();
+    clickableDiscrepancy[rid].add(e.attributes.clickable ?? 'undefined');
+  });
+  const clickableConflicts = Object.entries(clickableDiscrepancy)
+    .filter(([_, values]) => values.size > 1)
+    .map(([rid, values]) => ({ resource_id: rid, clickable_values: Array.from(values) }));
 
-  // For each with resource-id, get xpath and resource-id
   const with_resource_id_details = withResourceId.map(e => {
-    let info = { xpath: e.xpath, resource_id: e.attributes['resource-id'] };
+    const info = { xpath: e.xpath, resource_id: e.attributes['resource-id'] };
     if (e.attributes.bounds) info.bounds = e.attributes.bounds;
     if (e.attributes.text) info.text = e.attributes.text;
     if (e.attributes.focused) info.focused = e.attributes.focused;
     if (e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
-    return info;
-  });
 
-  // For each without resource-id, get xpath, resource-id (will be undefined), and if available, bounds or text
-  const missing_resource_id_details = withoutResourceId.map(e => {
-    let info = { xpath: e.xpath, resource_id: e.attributes ? e.attributes['resource-id'] : undefined };
-    if (e.attributes && e.attributes.bounds) info.bounds = e.attributes.bounds;
-    if (e.attributes && e.attributes.text) info.text = e.attributes.text;
-    if (e.attributes && e.attributes.focused) info.focused = e.attributes.focused;
-    if (e.attributes && e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
-    
-    // Generate XPath suggestions for elements without resource IDs
-    const suggestions = generateXPathSuggestions(e, elements);
-    if (suggestions.length > 0) {
-      info.suggested_xpaths = suggestions;
-    }
-    
-    return info;
-  });
-
-  // Also generate suggestions for elements WITH resource-id that might have duplicates
-  const withResourceIdWithSuggestions = withResourceId.map(e => {
-    let info = { xpath: e.xpath, resource_id: e.attributes['resource-id'] };
-    if (e.attributes.bounds) info.bounds = e.attributes.bounds;
-    if (e.attributes.text) info.text = e.attributes.text;
-    if (e.attributes.focused) info.focused = e.attributes.focused;
-    if (e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
-    
-    // Check if this element has duplicates and needs unique XPath
-    const similarElements = elements.filter(el => 
-      el.tag === e.tag && 
+    const similar = elements.filter(el =>
+      el.tag === e.tag &&
       el.attributes['resource-id'] === e.attributes['resource-id']
     );
-    
-    if (similarElements.length > 1) {
+
+    if (similar.length > 1) {
       const suggestions = generateXPathSuggestions(e, elements);
-      if (suggestions.length > 0) {
-        info.suggested_xpaths = suggestions;
-      }
+      if (suggestions.length > 0) info.suggested_xpaths = suggestions;
     }
-    
+
     return info;
   });
 
-  // Detailed clickable elements breakdown
-  const clickableElementsDetails = clickableElements.map(e => ({
-    xpath: e.xpath,
-    tag: e.tag,
-    text: e.attributes.text || '',
-    resource_id: e.attributes['resource-id'] || '',
-    bounds: e.attributes.bounds || '',
-    clickable: e.attributes.clickable,
-    focused: e.attributes.focused || 'false'
-  }));
+  const missing_resource_id_details = withoutResourceId.map(e => {
+    const info = { xpath: e.xpath };
+    if (e.attributes) {
+      if (e.attributes.bounds) info.bounds = e.attributes.bounds;
+      if (e.attributes.text) info.text = e.attributes.text;
+      if (e.attributes.focused) info.focused = e.attributes.focused;
+      if (e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
+    }
 
-  const nonClickableElementsDetails = nonClickableElements.map(e => ({
-    xpath: e.xpath,
-    tag: e.tag,
-    text: e.attributes.text || '',
-    resource_id: e.attributes['resource-id'] || '',
-    bounds: e.attributes.bounds || '',
-    clickable: e.attributes.clickable,
-    focused: e.attributes.focused || 'false'
-  }));
+    const suggestions = generateXPathSuggestions(e, elements);
+    if (suggestions.length > 0) info.suggested_xpaths = suggestions;
+
+    return info;
+  });
+
+  const riskyElements = clickableElements.filter(e =>
+    !e.attributes['resource-id'] &&
+    (!e.attributes.text || e.attributes.text.trim() === '') &&
+    generateXPathSuggestions(e, elements).length === 0
+  );
 
   return {
     elements_with_resource_id: withResourceId.length,
     elements_without_resource_id: withoutResourceId.length,
-    with_resource_id_details: withResourceIdWithSuggestions,
+    with_resource_id_details,
     missing_resource_id_details,
+    clickable_analysis: {
+      total_elements: elements.length,
+      clickable_true: clickableElements.length,
+      clickable_false: nonClickableElements.length,
+      clickable_not_specified: elementsWithoutClickableAttr.length,
+      clickable_percentage: elements.length > 0 ? (clickableElements.length / elements.length * 100).toFixed(2) : 0
+    },
     elements_focused: elements.filter(e => e.attributes.focused).length,
     elements_not_focused: elements.filter(e => !e.attributes.focused).length,
-    // Enhanced clickable analysis
-    clickable_analysis: clickableAnalysis,
-    clickable_elements_details: clickableElementsDetails,
-    non_clickable_elements_details: nonClickableElementsDetails,
     clickable_elements_with_resource_id: clickableElements.filter(e => e.attributes['resource-id']).length,
-    clickable_elements_without_resource_id: clickableElements.filter(e => !e.attributes['resource-id']).length
+    clickable_elements_without_resource_id: clickableElements.filter(e => !e.attributes['resource-id']).length,
+    clickable_elements_details: clickableElements.map(e => ({
+      xpath: e.xpath,
+      tag: e.tag,
+      text: e.attributes.text || '',
+      resource_id: e.attributes['resource-id'] || '',
+      bounds: e.attributes.bounds || '',
+      clickable: e.attributes.clickable,
+      focused: e.attributes.focused || 'false'
+    })),
+    non_clickable_elements_details: nonClickableElements.map(e => ({
+      xpath: e.xpath,
+      tag: e.tag,
+      text: e.attributes.text || '',
+      resource_id: e.attributes['resource-id'] || '',
+      bounds: e.attributes.bounds || '',
+      clickable: e.attributes.clickable,
+      focused: e.attributes.focused || 'false'
+    })),
+    clickable_conflicts: clickableConflicts,
+    risky_elements: riskyElements.map(e => ({ xpath: e.xpath, tag: e.tag }))
   };
 } 

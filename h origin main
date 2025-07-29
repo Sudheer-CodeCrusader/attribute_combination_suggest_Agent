@@ -1,0 +1,4 @@
+[33md6ca4b7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Enhanced clickable analysis functionality - Added comprehensive clickable element detection from both XML and image data sources - Enhanced XML processor to track clickable=true/false attributes - Created new image processor service for clickable analysis - Updated kickoff and status routes to include clickable analysis - Added detailed documentation for the new functionality - Maintains backward compatibility with existing features
+[33m2fcbb07[m[33m ([m[1;31morigin/main[m[33m, [m[1;31mattribute_combination/main[m[33m)[m Initial commit: Deploying Agent Resource Finder with robust XPath suggestion logic
+[33m94c59a4[m Initial commit: Deploying Agent Resource Finder with robust XPath suggestion logic
+[33m359328f[m feat: add XPath suggestion logic and detailed status response

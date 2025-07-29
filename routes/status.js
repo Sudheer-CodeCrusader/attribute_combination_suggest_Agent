@@ -24,6 +24,7 @@ router.get('/status/:kickoff_id', (req, res) => {
         original_xpath: element.xpath,
         text: element.text || 'No text',
         resource_id: element.resource_id || 'No resource-id',
+        clickable: element.clickable || 'not_specified',
         suggested_xpaths: element.suggested_xpaths.slice(0, 5) // Limit to top 5 suggestions
       });
     }
@@ -118,6 +119,31 @@ router.get('/status/:kickoff_id', (req, res) => {
       image_total_elements: data.imageAnalysis.clickable_attributes.total_elements_detected
     } : null
   };
+
+  // Add clickable conflicts analysis
+  if (data.summary.clickable_conflicts) {
+    enhancedData.clickable_conflicts = data.summary.clickable_conflicts;
+    enhancedData.clickable_conflicts_summary = {
+      total_conflicts: data.summary.clickable_conflicts.length,
+      conflict_details: data.summary.clickable_conflicts.map(conflict => ({
+        resource_id: conflict.resource_id,
+        clickable_values: conflict.clickable_values,
+        conflict_type: conflict.clickable_values.includes('true') && conflict.clickable_values.includes('false') ? 'true_false_mixed' : 'undefined_mixed'
+      }))
+    };
+  }
+
+  // Add risky elements analysis
+  if (data.summary.risky_elements) {
+    enhancedData.risky_elements = data.summary.risky_elements;
+    enhancedData.risky_elements_summary = {
+      total_risky_elements: data.summary.risky_elements.length,
+      risk_level: data.summary.risky_elements.length > 0 ? 'high' : 'low',
+      risk_description: data.summary.risky_elements.length > 0 ? 
+        `${data.summary.risky_elements.length} clickable elements without resource-id, text, or reliable XPath suggestions` : 
+        'No risky clickable elements detected'
+    };
+  }
   
   res.json({
     kickoff_id,
