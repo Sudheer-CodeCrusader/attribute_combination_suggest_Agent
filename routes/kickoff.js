@@ -1,6 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { processXml } from '../services/xmlProcessor.js';
+import { processImage } from '../services/imageProcessor.js';
 import store from '../store/memoryStore.js';
 import fetch from 'node-fetch';
 import axios from 'axios';
@@ -88,18 +89,22 @@ router.post('/kickoff', async (req, res) => {
     }
   }
 
-
-
   let summary;
+  let imageAnalysis;
   try {
+    // Process XML for clickable analysis
     summary = await processXml(xml_data);
+    
+    // Process image for clickable analysis
+    imageAnalysis = await processImage(imageBuffer);
+    
     // TODO: Call LLM here if needed
   } catch (e) {
     return res.status(200).json({ error: e.message });
   }
 
   const kickoff_id = uuidv4();
-  store.set(kickoff_id, { image_url, xml_url, summary, imageBuffer });
+  store.set(kickoff_id, { image_url, xml_url, summary, imageAnalysis, imageBuffer });
 
   res.json({ kickoff_id });
 });

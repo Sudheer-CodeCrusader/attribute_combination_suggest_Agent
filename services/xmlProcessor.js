@@ -374,12 +374,27 @@ export async function processXml(xmlString) {
   const withResourceId = elements.filter(e => e.attributes && e.attributes['resource-id']);
   const withoutResourceId = elements.filter(e => !e.attributes || !e.attributes['resource-id']);
 
+  // Enhanced clickable analysis
+  const clickableElements = elements.filter(e => e.attributes && e.attributes.clickable === 'true');
+  const nonClickableElements = elements.filter(e => e.attributes && e.attributes.clickable === 'false');
+  const elementsWithoutClickableAttr = elements.filter(e => !e.attributes || !e.attributes.hasOwnProperty('clickable'));
+
+  // Detailed clickable analysis
+  const clickableAnalysis = {
+    total_elements: elements.length,
+    clickable_true: clickableElements.length,
+    clickable_false: nonClickableElements.length,
+    clickable_not_specified: elementsWithoutClickableAttr.length,
+    clickable_percentage: elements.length > 0 ? (clickableElements.length / elements.length * 100).toFixed(2) : 0
+  };
+
   // For each with resource-id, get xpath and resource-id
   const with_resource_id_details = withResourceId.map(e => {
     let info = { xpath: e.xpath, resource_id: e.attributes['resource-id'] };
     if (e.attributes.bounds) info.bounds = e.attributes.bounds;
     if (e.attributes.text) info.text = e.attributes.text;
     if (e.attributes.focused) info.focused = e.attributes.focused;
+    if (e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
     return info;
   });
 
@@ -389,6 +404,7 @@ export async function processXml(xmlString) {
     if (e.attributes && e.attributes.bounds) info.bounds = e.attributes.bounds;
     if (e.attributes && e.attributes.text) info.text = e.attributes.text;
     if (e.attributes && e.attributes.focused) info.focused = e.attributes.focused;
+    if (e.attributes && e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
     
     // Generate XPath suggestions for elements without resource IDs
     const suggestions = generateXPathSuggestions(e, elements);
@@ -405,6 +421,7 @@ export async function processXml(xmlString) {
     if (e.attributes.bounds) info.bounds = e.attributes.bounds;
     if (e.attributes.text) info.text = e.attributes.text;
     if (e.attributes.focused) info.focused = e.attributes.focused;
+    if (e.attributes.clickable !== undefined) info.clickable = e.attributes.clickable;
     
     // Check if this element has duplicates and needs unique XPath
     const similarElements = elements.filter(el => 
@@ -422,12 +439,39 @@ export async function processXml(xmlString) {
     return info;
   });
 
+  // Detailed clickable elements breakdown
+  const clickableElementsDetails = clickableElements.map(e => ({
+    xpath: e.xpath,
+    tag: e.tag,
+    text: e.attributes.text || '',
+    resource_id: e.attributes['resource-id'] || '',
+    bounds: e.attributes.bounds || '',
+    clickable: e.attributes.clickable,
+    focused: e.attributes.focused || 'false'
+  }));
+
+  const nonClickableElementsDetails = nonClickableElements.map(e => ({
+    xpath: e.xpath,
+    tag: e.tag,
+    text: e.attributes.text || '',
+    resource_id: e.attributes['resource-id'] || '',
+    bounds: e.attributes.bounds || '',
+    clickable: e.attributes.clickable,
+    focused: e.attributes.focused || 'false'
+  }));
+
   return {
     elements_with_resource_id: withResourceId.length,
     elements_without_resource_id: withoutResourceId.length,
     with_resource_id_details: withResourceIdWithSuggestions,
     missing_resource_id_details,
     elements_focused: elements.filter(e => e.attributes.focused).length,
-    elements_not_focused: elements.filter(e => !e.attributes.focused).length
+    elements_not_focused: elements.filter(e => !e.attributes.focused).length,
+    // Enhanced clickable analysis
+    clickable_analysis: clickableAnalysis,
+    clickable_elements_details: clickableElementsDetails,
+    non_clickable_elements_details: nonClickableElementsDetails,
+    clickable_elements_with_resource_id: clickableElements.filter(e => e.attributes['resource-id']).length,
+    clickable_elements_without_resource_id: clickableElements.filter(e => !e.attributes['resource-id']).length
   };
 } 

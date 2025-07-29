@@ -34,6 +34,7 @@ router.get('/status/:kickoff_id', (req, res) => {
     actual_xpath: element.xpath,
     text: element.text || '',
     resource_id: element.resource_id || '',
+    clickable: element.clickable || 'not_specified',
     suggested_xpaths: element.suggested_xpaths || []
   }));
 
@@ -70,6 +71,53 @@ router.get('/status/:kickoff_id', (req, res) => {
       });
     }
   });
+
+  // Enhanced clickable analysis from XML
+  if (data.summary.clickable_analysis) {
+    enhancedData.clickable_analysis_xml = {
+      total_elements: data.summary.clickable_analysis.total_elements,
+      clickable_true: data.summary.clickable_analysis.clickable_true,
+      clickable_false: data.summary.clickable_analysis.clickable_false,
+      clickable_not_specified: data.summary.clickable_analysis.clickable_not_specified,
+      clickable_percentage: data.summary.clickable_analysis.clickable_percentage,
+      clickable_elements_details: data.summary.clickable_elements_details || [],
+      non_clickable_elements_details: data.summary.non_clickable_elements_details || [],
+      clickable_elements_with_resource_id: data.summary.clickable_elements_with_resource_id || 0,
+      clickable_elements_without_resource_id: data.summary.clickable_elements_without_resource_id || 0
+    };
+  }
+
+  // Enhanced clickable analysis from image
+  if (data.imageAnalysis) {
+    enhancedData.clickable_analysis_image = {
+      total_elements_detected: data.imageAnalysis.clickable_attributes.total_elements_detected,
+      clickable_elements: data.imageAnalysis.clickable_attributes.clickable_elements,
+      non_clickable_elements: data.imageAnalysis.clickable_attributes.non_clickable_elements,
+      clickable_percentage: data.imageAnalysis.clickable_attributes.clickable_percentage,
+      analysis_method: data.imageAnalysis.image_analysis?.analysis_method || 'basic_image_analysis'
+    };
+  }
+
+  // Combined clickable analysis summary
+  enhancedData.combined_clickable_analysis = {
+    xml_analysis: data.summary.clickable_analysis ? {
+      total_elements: data.summary.clickable_analysis.total_elements,
+      clickable_true: data.summary.clickable_analysis.clickable_true,
+      clickable_false: data.summary.clickable_analysis.clickable_false,
+      clickable_percentage: data.summary.clickable_analysis.clickable_percentage
+    } : null,
+    image_analysis: data.imageAnalysis ? {
+      total_elements_detected: data.imageAnalysis.clickable_attributes.total_elements_detected,
+      clickable_elements: data.imageAnalysis.clickable_attributes.clickable_elements,
+      clickable_percentage: data.imageAnalysis.clickable_attributes.clickable_percentage
+    } : null,
+    comparison: data.summary.clickable_analysis && data.imageAnalysis ? {
+      xml_clickable_count: data.summary.clickable_analysis.clickable_true,
+      image_clickable_count: data.imageAnalysis.clickable_attributes.clickable_elements,
+      xml_total_elements: data.summary.clickable_analysis.total_elements,
+      image_total_elements: data.imageAnalysis.clickable_attributes.total_elements_detected
+    } : null
+  };
   
   res.json({
     kickoff_id,
